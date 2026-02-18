@@ -3009,15 +3009,16 @@ async function save() {
         escolhasPassado: escolhasPassado
     };
 
-    const { error } = await supabaseClient
-        .from('personagens')
-        .insert([
-            {
-                id: char.id,
-                user_id: user.id,
-                data: char
-            }
-        ]);
+  const { error } = await supabaseClient
+    .from('personagens')
+    .insert([
+        {
+            user_id: user.id,
+            dados: char
+        }
+    ]);
+
+
 
     if (error) {
         alert("Erro ao salvar online.");
@@ -3040,7 +3041,7 @@ async function carregarPersonagens() {
         return;
     }
 
-    chars = data.map(p => p.data);
+chars = data.map(p => p.dados);
 
     render();
 }
