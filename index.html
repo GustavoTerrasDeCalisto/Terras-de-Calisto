@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -977,6 +978,52 @@ body {
     accent-color: #007bff;
 }
 
+/* Container Principal do Evento */
+#death-event {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: radial-gradient(circle at 70% 50%, #1a1a1a 0%, #000 80%);
+    z-index: 10000; display: flex; align-items: center; justify-content: center;
+    color: white; font-family: 'Cinzel', serif; overflow: hidden;
+}
+
+/* Caveira observando (fundo, direita) */
+.grim-reaper {
+    position: absolute; right: 5%; top: 20%; width: 450px; opacity: 0.4;
+    filter: drop-shadow(0 0 30px #000); animation: flicker 5s infinite;
+}
+
+/* Mão Cadavérica subindo */
+.reaper-hand {
+    position: absolute; bottom: -100px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+    animation: slideUp 2s forwards ease-out;
+}
+
+/* Cartas 3D */
+.deck-container { display: flex; gap: 20px; perspective: 1000px; margin-bottom: 50px; }
+
+.card-3d {
+    width: 160px; height: 240px; cursor: pointer; transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-3d:hover { transform: translateZ(50px) rotateY(10deg); }
+.card-3d.flipped { transform: rotateY(180deg); }
+
+.card-front, .card-back {
+    position: absolute; width: 100%; height: 100%;
+    backface-visibility: hidden; border-radius: 12px; border: 2px solid #333;
+}
+
+.card-back { background: #111 url('URL_VERSO_CARTA') center/cover; }
+.card-front { 
+    background: #000; transform: rotateY(180deg); 
+    display: flex; flex-direction: column; justify-content: center; 
+    padding: 15px; text-align: center; border-color: var(--accent);
+}
+
+@keyframes slideUp { from { bottom: -500px; } to { bottom: 50px; } }
+@keyframes flicker { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.5; } }
 
 </style>
 
@@ -991,6 +1038,8 @@ body {
     </div>
     
     <div class="nav-btns">
+      <button class="btn btn-p" onclick="abrirComunidade()">🌍 Ver Comunidade</button>
+
         <button class="btn btn-s" onclick="show('list')">📚 Biblioteca</button>
                           <button type="button" onclick="TC.open()" class="magias-btn"></button>
 <button id="btnLogin" onclick="abrirLogin()">Login</button>
@@ -3075,18 +3124,20 @@ const r = db[c.origem || 'racas'][c.raca];        if(!r) return;
                     <small style="color:var(--accent)">${c.raca} | Nv.${c.nivel}</small>
                 </div>
                 <div style="color:var(--hp); font-weight:bold">HP: ${c.vAtu}</div>
+                                <div style="color:var(--SAN); font-weight:bold">  |  SAN: ${c.sAtu}</div>
+
             </div>`;
     });
 }
 
-function generateRandom(tipo) {
+async function generateRandom(tipo) { // Transformado em async
     // Se não passar tipo, sorteia entre racas ou humanoides
     if (!tipo) tipo = Math.random() > 0.5 ? 'racas' : 'humanoides';
     
     const bancoRacas = db[tipo];
     const chaves = Object.keys(bancoRacas);
-const racaSorteada = chaves[Math.floor(Math.random() * chaves.length)];
-const r = bancoRacas[racaSorteada];
+    const racaSorteada = chaves[Math.floor(Math.random() * chaves.length)];
+    const r = bancoRacas[racaSorteada];
 
     // --- NOVA LÓGICA DE PASSADO ---
     let passadoSorteado = "";
@@ -3290,9 +3341,17 @@ p: [...getRandomItems(db.extras.p, 1), ...passivasAleatorias],
 
     chars.push(char);
     localStorage.setItem('forge_v5', JSON.stringify(chars));
+
+    // --- NOVA LÓGICA: SALVAR NO SUPABASE ---
+    const user = (await supabaseClient.auth.getUser()).data.user;
+    if (user) {
+        await supabaseClient.from('personagens').insert([{ user_id: user.id, dados: char }]);
+    }
+
     render();
     show('list');
 }
+
 
 
 
@@ -3303,6 +3362,20 @@ function view(id) {
   
   
         const c = chars.find(i => i.id === id);
+        // Função de cálculo que considera as cartas de pacto
+const calcTotal = (base, ganhoPorNivel, bonusTipo) => {
+    let total = base + (c.nivel - 1) * ganhoPorNivel;
+    
+    // Soma bônus das cartas de pacto (ex: vLv, sLv, eLv)
+    if (c.cartasPacto) {
+        c.cartasPacto.forEach(carta => {
+            if (carta.bonus && carta.bonus[bonusTipo]) {
+                total += carta.bonus[bonusTipo];
+            }
+        });
+    }
+    return total;
+};
 const r = db[c.origem || 'racas'][c.raca];        
 const imgToUse = c.imgAnexada || r.img;
 
@@ -3312,6 +3385,7 @@ const calcEscada = (b, intervalo) => b + Math.floor((c.nivel - 1) / intervalo);
         document.getElementById('sheet-content').innerHTML = `
             <div class="sheet">
                 <button class="btn btn-s" onclick="show('list')">← Voltar</button>
+<button class="btn btn-p" onclick="postarCriatura(${id})">🌍 Publicar</button>
 
                 <div style="float:right">
                     <button class="btn btn-p" onclick="up(${id})">Subir Nível</button>
@@ -3679,7 +3753,55 @@ function showAttrInfo(attr, id) {
 }
 
 
-    function mod(id, s, v) { const c = chars.find(i => i.id === id); c[s] += v; updateDB(); view(id); }
+
+
+
+
+
+
+
+async function mod(id, s, v) { 
+    const c = chars.find(i => i.id === id);
+    if (!c) return;
+    
+    // Aplica a mudança localmente
+    c[s] += v; 
+
+    // Lógica de Morte/Pacto
+    if ((s === 'vAtu' || s === 'sAtu') && c[s] <= 0) {
+        c[s] = 0; 
+        triggerDeathEvent(id, s === 'vAtu' ? 'Vida' : 'Sanidade');
+    }
+
+    // 1. Atualiza a tela IMEDIATAMENTE (Caminho feliz)
+    view(id); 
+
+    // 2. Tenta salvar na nuvem
+    const user = (await supabaseClient.auth.getUser()).data.user;
+    if (user) {
+        const { error } = await supabaseClient
+            .from('personagens')
+            .update({ dados: c })
+            .eq('user_id', user.id)
+            .filter('dados->>id', 'eq', id);
+
+        if (error) {
+            console.error("Erro ao salvar:", error);
+            alert("Atenção: Erro ao sincronizar com a nuvem.");
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
 function up(id) {
     const c = chars.find(i => i.id === id);
     const r = db[c.origem || 'racas'][c.raca];
@@ -3899,7 +4021,7 @@ function animate(){
     animationId = requestAnimationFrame(animate);
 }
 
-function chooseAttr(attr, id) {
+async function chooseAttr(attr, id) {
     const c = chars.find(i => i.id === id);
     const r = db[c.origem || 'racas']?.[c.raca];
 
@@ -3909,42 +4031,80 @@ function chooseAttr(attr, id) {
         c.attrs = { bru:0, agi:0, det:0, pre:0, lib:0, cnx:0 };
     }
 
-    // +1 atributo
+    // +1 atributo e sobe nível
     c.attrs[attr] += 1;
-
-    // sobe nível
     c.nivel += 1;
 
-    // 🔥 AQUI ESTÁ A CORREÇÃO
-    // soma apenas o ganho do nível, não cura tudo
+    // Soma ganho do nível
     c.vAtu += r.vLv || 0;
     c.sAtu += r.sLv || 0;
     c.eAtu += r.eLv || 0;
 
     document.querySelector(".level-popup")?.remove();
 
-    updateDB();
+    // 🔥 ATUALIZAÇÃO ONLINE
+    await updateDB(id); 
+    
     view(id);
+    render(); // Atualiza a lista principal também
 }
 
 
 
-    function updateDB() { localStorage.setItem('forge_v5', JSON.stringify(chars)); render(); }
-function del(id) { 
-    if(confirm("Banir criatura?")) { 
-        // 1. Remove do array
+
+async function updateDB(id) {
+    const user = (await supabaseClient.auth.getUser()).data.user;
+    if (!user) return;
+
+    // Se passarmos um ID, salva só esse. Se não, tenta salvar o que estiver em foco.
+    const charParaSalvar = chars.find(c => c.id === id);
+    if (!charParaSalvar) return;
+
+    const { error } = await supabaseClient
+        .from('personagens')
+        .update({ dados: charParaSalvar })
+        .eq('user_id', user.id)
+        .filter('dados->>id', 'eq', id);
+
+    if (error) console.error("Erro ao sincronizar com a nuvem:", error);
+}
+
+async function del(id) { 
+    if(confirm("Banir criatura permanentemente das crônicas?")) { 
+        const user = (await supabaseClient.auth.getUser()).data.user;
+        
+        if (!user) {
+            alert("Erro: Usuário não autenticado.");
+            return;
+        }
+
+        // 1. Remove do banco de dados (Nuvem)
+        const { error } = await supabaseClient
+            .from('personagens')
+            .delete()
+            .eq('user_id', user.id)
+            .filter('dados->>id', 'eq', id);
+
+        if (error) {
+            console.error("Erro ao deletar da nuvem:", error);
+            alert("Não foi possível deletar da nuvem. Verifique sua conexão.");
+            return;
+        }
+
+        // 2. Remove do array local (Memória)
         chars = chars.filter(i => i.id !== id); 
         
-        // 2. Salva no LocalStorage
+        // 3. Limpa o LocalStorage (Opcional, se ainda usar como backup)
         localStorage.setItem('forge_v5', JSON.stringify(chars)); 
         
-        // 3. Atualiza o HTML da lista (IMPORTANTE)
+        // 4. Atualiza a interface
         render(); 
-        
-        // 4. Volta para a tela da biblioteca
         show('list'); 
+        
+        alert("Personagem banido com sucesso.");
     } 
 }
+
 
  window.DATASET = {
   magias: [
@@ -9234,6 +9394,243 @@ function alternarParaLogin() {
   document.getElementById("loginArea").style.display = "block";
   document.getElementById("registerArea").style.display = "none";
 }
+
+
+// 1. BANCO DE DADOS DAS CARTAS (Customizável)
+const deckMorte = [
+    { id: 'c1', nome: "O Sobrevivente", efeito: "Vida Máxima +5", bonus: { vLv: 5 } },
+    { id: 'c2', nome: "Mente de Aço", efeito: "Sanidade Máxima +5", bonus: { sLv: 5 } },
+    { id: 'c3', nome: "Pacto de Sangue", efeito: "Dano +2 | Vida Máx -3", bonus: { vLv: -3 } },
+    { id: 'c4', nome: "Sorte Maldita", efeito: "Crítico +1", bonus: { crit: 1 } }
+];
+
+
+// 3. O EVENTO VISUAL
+function triggerDeathEvent(id, motivo) {
+    if (document.getElementById('death-event')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'death-event';
+    
+    // Filtra cartas que o personagem ainda não tem
+    if(!chars.find(i => i.id === id).cartasPacto) chars.find(i => i.id === id).cartasPacto = [];
+    const jaTem = chars.find(i => i.id === id).cartasPacto.map(cp => cp.id);
+    const cartasDisponiveis = deckMorte.filter(ct => !jaTem.includes(ct.id))
+                                       .sort(() => 0.5 - Math.random()).slice(0, 3);
+
+    overlay.innerHTML = `
+        <img src="URL_DA_SUA_CAVEIRA_SVG" class="grim-reaper">
+        <div class="reaper-hand">
+            <h2 style="margin-bottom:20px; text-shadow: 0 0 10px red;">Sua ${motivo} acabou... escolha um destino.</h2>
+            <div class="deck-container">
+                ${cartasDisponiveis.map(carta => `
+                    <div class="card-3d" onclick="escolherCarta(this, ${id}, ${JSON.stringify(carta).replace(/"/g, '&quot;')})">
+                        <div class="card-back"></div>
+                        <div class="card-front">
+                            <h3 style="color:var(--accent)">${carta.nome}</h3>
+                            <p style="font-size:0.9em">${carta.efeito}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function escolherCarta(el, id, carta) {
+    el.classList.add('flipped'); 
+    
+    setTimeout(async () => {
+        const c = chars.find(i => i.id === id);
+        if (!c) return;
+
+        if (!c.cartasPacto) c.cartasPacto = [];
+        c.cartasPacto.push(carta);
+
+        // Aplica bônus se houver
+        if(carta.bonus) {
+            Object.keys(carta.bonus).forEach(key => {
+                c[key] = (c[key] || 0) + carta.bonus[key];
+            });
+        }
+
+        c.vAtu = c.vAtu <= 0 ? 1 : c.vAtu;
+        c.sAtu = c.sAtu <= 0 ? 1 : c.sAtu;
+
+        document.getElementById('death-event').remove();
+        
+        view(id);
+        render();
+        
+        await updateDB(id); // Salva na nuvem apenas este personagem
+    }, 1000);
+}
+// 1. ABRE A TELA E CARREGA OS DADOS
+async function abrirComunidade() {
+    show('community');
+    await carregarComunidade();
+}
+
+// 2. BUSCA NO SUPABASE E RENDERIZA OS CARDS
+async function carregarComunidade() {
+    const grid = document.getElementById("communityGrid");
+    grid.innerHTML = "<p style='color:var(--accent); text-align:center;'>Invocando criaturas...</p>";
+
+    const { data, error } = await supabaseClient
+        .from("criaturas_publicas")
+        .select("*")
+        .order("id", { ascending: false });
+
+    if (error) {
+        grid.innerHTML = `<p style='color:var(--hp)'>Erro: ${error.message}</p>`;
+        return;
+    }
+
+    grid.innerHTML = "";
+    
+    // Guardamos os dados em uma variável global temporária para os botões acessarem sem bugar
+    window.comunidadeAtual = data;
+
+    data.forEach((item, index) => {
+        const c = item.dados;
+        const r = db[c.origem || 'racas']?.[c.raca];
+        if(!r) return;
+
+        const card = document.createElement("div");
+        card.innerHTML = `
+            <div style="display: flex; align-items: center; background: var(--card); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 10px;">
+                <img src="${c.imgAnexada || r.img}" style="width:60px; height:60px; border-radius:8px; margin-right:15px; object-fit: cover;">
+                <div style="flex:1">
+                    <b style="color:var(--text)">${c.nome}</b><br>
+                    <small style="color:var(--accent)">${c.raca} | Nv.${c.nivel}</small>
+                </div>
+                <div style="display:flex; gap: 5px;">
+                    <!-- Passamos o INDEX do array, impossível de quebrar -->
+                    <button class="btn btn-p" onclick="verPublicaPelaComunidade(${index})">Ver</button>
+                    <button class="btn btn-s" style="background:var(--accent)" onclick="importarPelaComunidade(${index})">📥</button>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+// Funções de suporte que usam o index do array
+function verPublicaPelaComunidade(idx) {
+    const criatura = window.comunidadeAtual[idx].dados;
+    verPublica(criatura); // Chama sua função original
+}
+
+function importarPelaComunidade(idx) {
+    const criatura = window.comunidadeAtual[idx].dados;
+    importarCriatura(criatura); // Chama sua função original
+}
+
+
+// 3. POSTA A CRIATURA NA COMUNIDADE
+async function postarCriatura(idLocal) {
+    const user = (await supabaseClient.auth.getUser()).data.user;
+    if (!user) return alert("Logue para postar!");
+
+    const c = chars.find(i => String(i.id) === String(idLocal));
+    if (!c) return;
+
+    // IMPORTANTE: Enviamos apenas o necessário, o banco gera ID e Data
+    const { error } = await supabaseClient
+        .from("criaturas_publicas")
+        .insert([{
+            user_id: user.id,
+            nome: c.nome,
+            nivel: c.nivel,
+            dados: c // Aqui vai o objeto completo com o SEU id de Date.now()
+        }]);
+
+    if (error) alert("Erro: " + error.message);
+    else alert("Postado com sucesso!");
+}
+
+function verPublica(c) {
+    // 1. Garante que temos o objeto limpo
+    const dadosLimpos = typeof c === 'string' ? JSON.parse(c) : c;
+
+    // 2. Cria um ID temporário único
+    const tempId = Date.now(); // Usando número para evitar conflitos de tipo
+    
+    // 3. Clona o objeto e injeta o ID temporário
+    const copia = { ...dadosLimpos, id: tempId };
+    
+    // 4. Adiciona ao array global chars para que a sua função view(id) o encontre
+    if (!window.chars) window.chars = [];
+    chars.push(copia);
+    
+    // 5. ATENÇÃO: Verifique se o ID da sua tela de ficha é 'view' ou 'sheet'
+    // Se o seu HTML for <div id="sheet" class="section">, mude para show('sheet')
+    show('view'); 
+    
+    // 6. Chama a sua função de renderizar a ficha
+    setTimeout(() => {
+        view(tempId);
+        
+        // Esconde botões que não fazem sentido em uma "preview" pública
+        const btnUp = document.querySelector("button[onclick^='up']");
+        const btnDel = document.querySelector("button[onclick^='del']");
+        if(btnUp) btnUp.style.display = "none";
+        if(btnDel) btnDel.style.display = "none";
+        
+        // Adiciona um botão de "Fechar Preview" se quiser
+        const sheet = document.querySelector('.sheet');
+        if(sheet && !document.getElementById('btn-close-preview')) {
+            const btnClose = document.createElement('button');
+            btnClose.id = 'btn-close-preview';
+            btnClose.className = 'btn btn-s';
+            btnClose.style.background = 'var(--hp)';
+            btnClose.innerText = 'Sair da Visualização';
+            btnClose.onclick = () => {
+                chars = chars.filter(i => i.id !== tempId); // Remove o lixo do array
+                show('community');
+            };
+            sheet.prepend(btnClose);
+        }
+    }, 50);
+}
+
+
+// 5. IMPORTA PARA A BIBLIOTECA PESSOAL (SALVA NO SUPABASE DO USUÁRIO)
+async function importarCriatura(dadosCriatura) {
+    const user = (await supabaseClient.auth.getUser()).data.user;
+    
+    if (!user) {
+        alert("Você precisa estar logado para capturar criaturas!");
+        return;
+    }
+
+    // 1. Criamos uma cópia limpa com um novo ID para o seu inventário
+    const novaCopia = { 
+        ...dadosCriatura, 
+        id: Date.now(), // Novo ID local
+        user_id_original: dadosCriatura.user_id // Apenas para referência
+    };
+
+    // 2. Salvamos na sua tabela pessoal 'personagens'
+    const { error } = await supabaseClient
+        .from('personagens')
+        .insert([{ 
+            user_id: user.id, 
+            dados: novaCopia 
+        }]);
+
+    if (error) {
+        alert("Erro ao capturar: " + error.message);
+    } else {
+        chars.push(novaCopia); // Adiciona na sua lista atual
+        render(); // Atualiza a grade principal
+        alert(`🔥 ${novaCopia.nome} agora faz parte da sua coleção!`);
+    }
+}
+
+
+
 </script>
 
 <!-- BOTÃO LOGIN -->
