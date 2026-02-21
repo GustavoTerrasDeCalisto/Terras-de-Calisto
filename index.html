@@ -1281,7 +1281,7 @@ body {
 
 },
  "passados": {
-
+"humanoidpass": {
 "Aldeão": {
   "res": "Sagrado",
   "bonus": {
@@ -1323,9 +1323,9 @@ body {
   "pre": [11, 0, 0],
   "lib": [8, 0, 0],
   "cnx": [14, 0, 0]
-}
+}}
 ,
-
+"feerico": {
 "Bárbaro": {
   "res": "Fogo",
   "bonus": {
@@ -1368,20 +1368,7 @@ body {
   "lib": [9, 0, 0],
   "cnx": [8, 0, 0]
 }
-
-,
-
-
-"Arqueiro": {
-  "res": "Vento",
-  "bonus": "Nível 0: +2 Precisão, +5 dano com Arcos.",
-  "bru": [8, 0, 0],
-  "agi": [14, 0, 0],
-  "det": [9, 0, 0],
-  "pre": [10, 0, 0],
-  "lib": [11, 0, 0],
-  "cnx": [8, 0, 0]
-}
+ }
 
 
 }
@@ -2887,12 +2874,13 @@ function init() {
     const rSel = document.getElementById('f-raca');
     rSel.innerHTML = "";
     
-    // Popula Raças
-    Object.keys(db.racas).forEach(k => rSel.innerHTML += `<option value="racas|${k}">🐾 Fera: ${k}</option>`);
-    Object.keys(db.humanoides).forEach(k => rSel.innerHTML += `<option value="humanoides|${k}">👤 Humanoide: ${k}</option>`);
-    
-    // Popula Passados
-    const pSel = document.getElementById('f-passado');
+   // Popula Raças (Mantenha como está)
+Object.keys(db.racas).forEach(k => rSel.innerHTML += `<option value="racas|${k}">🐾 Fera: ${k}</option>`);
+Object.keys(db.humanoides).forEach(k => rSel.innerHTML += `<option value="humanoides|${k}">👤 Humanoide: ${k}</option>`);
+
+// Limpa os passados inicialmente (eles aparecerão ao selecionar a raça)
+const pSel = document.getElementById('f-passado');
+if (pSel) pSel.innerHTML = '<option value="">Selecione uma raça primeiro...</option>';
     pSel.innerHTML = ""; 
     Object.keys(db.passados).forEach(p => pSel.innerHTML += `<option value="${p}">${p}</option>`);
 
@@ -2952,18 +2940,30 @@ const nome = item.nome || item.name || item;
 
 
 function updateFormPreview() { 
-    // Quebra o valor "categoria|nome" (ex: "humanoides|Viking-Berserker")
     const val = document.getElementById('f-raca').value.split('|');
-    const categoria = val[0];
+    const categoria = val[0]; // 'humanoides' ou 'racas'
     const racaKey = val[1];
     
     const raca = db[categoria][racaKey];
     document.getElementById('f-preview-img').src = raca.img; 
 
-    // Mostra/Esconde o seletor de passado apenas se for Humanoide
+    const pSel = document.getElementById('f-passado');
     const passCont = document.getElementById('passado-container');
-    if (passCont) {
-        passCont.style.display = (categoria === 'humanoides') ? 'block' : 'none';
+
+    if (pSel) {
+        pSel.innerHTML = '<option value="">Selecione um Passado...</option>';
+        
+        // Mapeia: se for humanoide usa 'humanoidpass', se for raca usa 'feerico'
+        const subCategoria = (categoria === 'humanoides') ? 'humanoidpass' : 'feerico';
+        
+        if (db.passados[subCategoria]) {
+            Object.keys(db.passados[subCategoria]).forEach(p => {
+                pSel.innerHTML += `<option value="${subCategoria}|${p}">${p}</option>`;
+            });
+        }
+        
+        // Agora sempre mostra o container de passado, já que ambas categorias têm passados
+        if (passCont) passCont.style.display = 'block';
     }
 }
 
@@ -3358,272 +3358,221 @@ p: [...getRandomItems(db.extras.p, 1), ...passivasAleatorias],
 
 
 function view(id) {
-  
-  
-  
-        const c = chars.find(i => i.id === id);
-        // Função de cálculo que considera as cartas de pacto
-const calcTotal = (base, ganhoPorNivel, bonusTipo) => {
-    let total = base + (c.nivel - 1) * ganhoPorNivel;
+    const c = chars.find(i => i.id === id);
     
-    // Soma bônus das cartas de pacto (ex: vLv, sLv, eLv)
-    if (c.cartasPacto) {
-        c.cartasPacto.forEach(carta => {
-            if (carta.bonus && carta.bonus[bonusTipo]) {
-                total += carta.bonus[bonusTipo];
-            }
-        });
-    }
-    return total;
-};
-const r = db[c.origem || 'racas'][c.raca];        
-const imgToUse = c.imgAnexada || r.img;
+    // Função de cálculo que considera as cartas de pacto
+    const calcTotal = (base, ganhoPorNivel, bonusTipo) => {
+        let total = base + (c.nivel - 1) * ganhoPorNivel;
+        
+        // Soma bônus das cartas de pacto (ex: vLv, sLv, eLv)
+        if (c.cartasPacto) {
+            c.cartasPacto.forEach(carta => {
+                if (carta.bonus && carta.bonus[bonusTipo]) {
+                    total += carta.bonus[bonusTipo];
+                }
+            });
+        }
+        return total;
+    };
 
-const calc = (b, g) => b + (c.nivel - 1) * g;
-const calcEscada = (b, intervalo) => b + Math.floor((c.nivel - 1) / intervalo);
+    const r = db[c.origem || 'racas'][c.raca];        
+    const imgToUse = c.imgAnexada || r.img;
 
-        document.getElementById('sheet-content').innerHTML = `
-            <div class="sheet">
-                <button class="btn btn-s" onclick="show('list')">← Voltar</button>
-<button class="btn btn-p" onclick="postarCriatura(${id})">🌍 Publicar</button>
+    const calc = (b, g) => b + (c.nivel - 1) * g;
+    const calcEscada = (b, intervalo) => b + Math.floor((c.nivel - 1) / intervalo);
 
-                <div style="float:right">
-                    <button class="btn btn-p" onclick="up(${id})">Subir Nível</button>
-                    <button class="btn btn-s" style="background:var(--hp)" onclick="del(${id})">Deletar</button>
+    document.getElementById('sheet-content').innerHTML = `
+        <div class="sheet">
+            <button class="btn btn-s" onclick="show('list')">← Voltar</button>
+            <button class="btn btn-p" onclick="postarCriatura(${id})">🌍 Publicar</button>
+
+            <div style="float:right">
+                <button class="btn btn-p" onclick="up(${id})">Subir Nível</button>
+                <button class="btn btn-s" style="background:var(--hp)" onclick="del(${id})">Deletar</button>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 2fr; gap:30px; margin-top:30px">
+                <div class="stat-col">
+                    <img src="${imgToUse}" style="width:100%; border-radius:15px; border:2px solid var(--primary)">
+                    <img src="${r.img2}" style="width:150px; height:150px; object-fit: cover; object-position: top; border-radius:50%; border:3px solid var(--accent); margin:-40px auto 0; display:block; position:relative; background:#000">
+                    <button class="btn" style="background:var(--accent); margin-right:5px" onclick="healFull(${id})">✨ Restaurar Tudo</button>
+
+                    <div class="stat-node" style="border-color:var(--hp)">
+                        <small>VIDA</small><br>
+                        <button onclick="mod(${id},'vAtu',-1)">-</button> <b style="font-size:1.4em">${c.vAtu}</b> <button onclick="mod(${id},'vAtu',1)">+</button>
+                        <br><small>Máx: ${calc(r.vida, r.vLv)}</small>
+                    </div>
+                    <div class="stat-node" style="border-color:var(--san)">
+                        <small>SANIDADE</small><br>
+                        <button onclick="mod(${id},'sAtu',-1)">-</button> <b>${c.sAtu}</b> <button onclick="mod(${id},'sAtu',1)">+</button>
+                        <br><small>Máx: ${calc(r.sanidade, r.sLv)}</small>
+                    </div>
+                    <div class="stat-node" style="border-color:var(--esp)">
+                        <small>ESPECIAL</small><br>
+                        <button onclick="mod(${id},'eAtu',-1)">-</button> <b>${c.eAtu}</b> <button onclick="mod(${id},'eAtu',1)">+</button>
+                        <br><small>Máx: ${calc(r.especial, r.eLv)}</small>
+                    </div>
+                    <div class="stat-node"><small>ARMADURA</small><br><b>${calcEscada(r.armadura, r.aLv)}</b> | Mov: ${r.movimento}m</div>
                 </div>
 
+                <div>
+                    <h1 style="margin:0">${c.nome} <span style="color:var(--primary)">Nv.${c.nivel}</span></h1>
+                    <p style="color:var(--accent)">Tags: ${r.tags} | Elemento: ${r.elemento}</p>
+                    
+                    <div class="attr-grid">
+                        ${['bru','agi','det','pre','lib','cnx'].map(a => {
+                            let val;
 
-                <div style="display:grid; grid-template-columns: 1fr 2fr; gap:30px; margin-top:30px">
-                    <div class="stat-col">
-                        <img src="${imgToUse}" style="width:100%; border-radius:15px; border:2px solid var(--primary)">
-<img src="${r.img2}" style="width:150px; height:150px; object-fit: cover; object-position: top; border-radius:50%; border:3px solid var(--accent); margin:-40px auto 0; display:block; position:relative; background:#000">
-                        <button class="btn" style="background:var(--accent); margin-right:5px" onclick="healFull(${id})">✨ Restaurar Tudo</button>
+                            // Lógica para encontrar o valor base no novo db.passados
+        if (c.passado) {
+    // Descobre automaticamente onde o passado está
+    const pasta = db.passados.humanoidpass?.[c.passado]
+        ? 'humanoidpass'
+        : db.passados.feerico?.[c.passado]
+            ? 'feerico'
+            : null;
 
-                        <div class="stat-node" style="border-color:var(--hp)">
-                            <small>VIDA</small><br>
-                            <button onclick="mod(${id},'vAtu',-1)">-</button> <b style="font-size:1.4em">${c.vAtu}</b> <button onclick="mod(${id},'vAtu',1)">+</button>
-                            <br><small>Máx: ${calc(r.vida, r.vLv)}</small>
-                        </div>
-                        <div class="stat-node" style="border-color:var(--san)">
-                            <small>SANIDADE</small><br>
-                            <button onclick="mod(${id},'sAtu',-1)">-</button> <b>${c.sAtu}</b> <button onclick="mod(${id},'sAtu',1)">+</button>
-                            <br><small>Máx: ${calc(r.sanidade, r.sLv)}</small>
-                        </div>
-                        <div class="stat-node" style="border-color:var(--esp)">
-                            <small>ESPECIAL</small><br>
-                            <button onclick="mod(${id},'eAtu',-1)">-</button> <b>${c.eAtu}</b> <button onclick="mod(${id},'eAtu',1)">+</button>
-                            <br><small>Máx: ${calc(r.especial, r.eLv)}</small>
-                        </div>
-                        <div class="stat-node"><small>ARMADURA</small><br><b>${calcEscada(r.armadura, r.aLv)}</b> | Mov: ${r.movimento}m</div>
-                    </div>
-
-                    <div>
-                        <h1 style="margin:0">${c.nome} <span style="color:var(--primary)">Nv.${c.nivel}</span></h1>
-                        <p style="color:var(--accent)">Tags: ${r.tags} | Elemento: ${r.elemento}</p>
-                        
-                        <div class="attr-grid">
-    ${['bru','agi','det','pre','lib','cnx'].map(a => {
-let val;
-
-if (c.passado && db.passados?.[c.passado]?.[a]) {
-    val = db.passados[c.passado][a];
+    if (pasta) {
+        val = db.passados[pasta][c.passado][a];
+    } else {
+        val = r[a];
+    }
 } else {
     val = r[a];
 }
 
+                            const bonus = c.attrs?.[a] || 0;
+                            const base = (Array.isArray(val) ? val[0] : val) + bonus;
+                            
+                            return `
+                                <div class="attr-box">
+                                    ${a.toUpperCase()}<br><b>${base}</b>
+                                    ${(() => {
+                                        const valorFinal = base;
+                                        let T;
+                                        if (valorFinal < 9) { T = -2; } 
+                                        else if (valorFinal < 10) { T = -1; } 
+                                        else if (valorFinal === 10) { T = 0; } 
+                                        else { T = Math.floor((valorFinal - 8) / 3); }
 
-const bonus = c.attrs?.[a] || 0;
-const base = (Array.isArray(val) ? val[0] : val) + bonus;
-        const d = Array.isArray(val) ? val[1] : 0;
-        const t = Array.isArray(val) ? val[2] : 0;
-        return `
-            <div class="attr-box">
-                ${a.toUpperCase()}<br><b>${base}</b>
-${(() => {
-    const bonusExtra = c.attrs?.[a] || 0;
-    const valorBase = Array.isArray(val) ? val[0] : val;
-    const valorFinal = valorBase + bonusExtra;
+                                        const D = Math.floor((valorFinal - 8) / 5);
 
-    let T;
-    if (valorFinal < 9) {
-        T = -2;
-    } else if (valorFinal < 10) {
-        T = -1;
-    } else if (valorFinal === 10) {
-        T = 0;
-    } else {
-        T = Math.floor((valorFinal - 8) / 3);
-    }
-
-    const D = Math.floor((valorFinal - 8) / 5);
-
-return `<span class="attr-bonus">
-    ${T >= 0 ? '+' + T : T} no teste | ${D >= 0 ? '+' + D : D} dano
-</span>`;
-})()}
-            </div>`;
-    }).join('')}
-</div>
-
-${c.passado ? `
-<div class="desc-box" style="border-left: 4px solid var(--accent); background: rgba(6,182,212,0.05)">
-    
-    <h4 style="margin:0; color:var(--accent)">
-        📜 Passado: ${c.passado}
-    </h4>
-
-    <div style="margin-top:8px; font-size:0.9em">
-        <div style="font-weight:bold; margin-bottom:6px;">
-            Resistência: ${db.passados[c.passado].res}
-        </div>
-
-        <details>
-            <summary style="cursor:pointer; font-weight:bold;">
-                Ver Progressão de Níveis
-            </summary>
-
-            <div class="bonus-list">
-                ${
-                  Object.entries(db.passados[c.passado].bonus)
-                  .filter(([nivel]) => nivel <= c.nivel) // 🔥 MOSTRA SÓ ATÉ O NÍVEL ATUAL
-                  .map(([nivel, texto]) => `
-                    <div class="nivel-bonus 
-                        ${nivel == 0 ? 'nivel-zero' : ''} 
-                        ${nivel == c.nivel ? 'nivel-atual' : ''}">
-                        
-                        <strong>Nível ${nivel}</strong>
-<div>
-  ${
-    texto.includes('|')
-    ? renderOpcoesPassado(texto, nivel, c)
-    : texto.replace(/\n/g, "<br>")
-  }
-</div>
+                                        return `<span class="attr-bonus">
+                                            ${T >= 0 ? '+' + T : T} no teste | ${D >= 0 ? '+' + D : D} dano
+                                        </span>`;
+                                    })()}
+                                </div>`;
+                        }).join('')}
                     </div>
-                  `).join('')
-                }
+
+               ${c.passado ? (() => {
+    // 1. Localiza onde o passado está (se em feerico ou humanoidpass)
+    const pasta = db.passados.humanoidpass[c.passado] ? 'humanoidpass' : 'feerico';
+    const ref = db.passados[pasta][c.passado];
+
+    return `
+    <div class="desc-box" style="border-left: 4px solid var(--accent); background: rgba(6,182,212,0.05)">
+        
+        <h4 style="margin:0; color:var(--accent)">
+            📜 Passado: ${c.passado}
+        </h4>
+
+        <div style="margin-top:8px; font-size:0.9em">
+            <div style="font-weight:bold; margin-bottom:6px;">
+                Resistência: ${ref.res}
             </div>
 
-        </details>
-    </div>
-</div>
-` : ''}
+            <details>
+                <summary style="cursor:pointer; font-weight:bold;">
+                    Ver Progressão de Níveis
+                </summary>
 
-
-
-
-<!-- ========================= -->
-<!--  SLOTS DE EQUIPAMENTOS   -->
-<!-- ========================= -->
-<!-- ========================= -->
-<!--  SLOTS DE EQUIPAMENTOS   -->
-<!-- ========================= -->
-<div id="equipmentSlots">
-
-  <!-- Cabeça -->
-  <div id="slot-cabeca" class="equip-slot" data-slot="cabeca">
-    <span class="slot-label">Cabeça</span>
-    <img class="slot-img" src="" alt="">
-    <div class="item-tooltip">
-      <h3 class="tooltip-name"></h3>
-      <p class="tooltip-desc"></p>
-      <ul class="tooltip-stats"></ul>
-    </div>
-  </div>
-
-  <!-- Peitoral -->
-  <div id="slot-peito" class="equip-slot" data-slot="peitoral">
-    <span class="slot-label">Peitoral</span>
-    <img class="slot-img" src="" alt="">
-    <div class="item-tooltip">
-      <h3 class="tooltip-name"></h3>
-      <p class="tooltip-desc"></p>
-      <ul class="tooltip-stats"></ul>
-    </div>
-  </div>
-
-  <!-- Mãos -->
-  <div id="slot-maos" class="equip-slot" data-slot="maos">
-    <span class="slot-label">Mãos</span>
-    <img class="slot-img" src="" alt="">
-    <div class="item-tooltip">
-      <h3 class="tooltip-name"></h3>
-      <p class="tooltip-desc"></p>
-      <ul class="tooltip-stats"></ul>
-    </div>
-  </div>
-
-  <!-- Pernas -->
-  <div id="slot-pernas" class="equip-slot" data-slot="pernas">
-    <span class="slot-label">Pernas</span>
-    <img class="slot-img" src="" alt="">
-    <div class="item-tooltip">
-      <h3 class="tooltip-name"></h3>
-      <p class="tooltip-desc"></p>
-      <ul class="tooltip-stats"></ul>
-    </div>
-  </div>
-
-  <!-- Acessório -->
-  <div id="slot-acessorio" class="equip-slot" data-slot="acessorio">
-    <span class="slot-label">Acessório</span>
-    <img class="slot-img" src="" alt="">
-    <div class="item-tooltip">
-      <h3 class="tooltip-name"></h3>
-      <p class="tooltip-desc"></p>
-      <ul class="tooltip-stats"></ul>
-    </div>
-  </div>
-
-
-</div>
-<div id="armas-extras" style="margin-top: 10px; display: grid; gap: 10px;">
-    ${c.a.map(nomeArma => {
-const arma = db.extras.a.find(w => w.name === nomeArma);
-        if(!arma) return '';
-      return `
-    <div style="background: rgba(124, 58, 237, 0.1); border: 1px solid var(--primary); padding: 12px; border-radius: 8px; font-size: 0.85em;">
-        <b style="color: var(--accent); text-transform: uppercase;">⚔️ ${arma.name}</b>
-
-        <div style="display:flex; gap:10px; margin-top:8px;">
-            <img src="${arma.img}" style="width:60px; height:60px; object-fit:contain; border-radius:8px; background:#000;">
-            
-            <div style="flex:1">
-                <div style="opacity:0.9; font-size:0.85em; margin-bottom:6px;">
-                    ${arma.desc}
-                </div>
-
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                    <span><b>Dano:</b> ${arma.damageType}</span>
-                    <span><b>Tipo:</b> ${arma.damageDice}</span>
-                    <span><b>Elemento:</b> ${arma.elementalDamage}</span>
-                    <span><b>Alcance:</b> ${arma.range}</span>
-                    <span><b>Crítico:</b> ${arma.critical}</span>
-                    <span style="grid-column: span 2;"><b>Bônus:</b> ${arma.equipBonus}</span>
-                </div>
-            </div>
-        </div>
-    </div>
-`;
-
-    }).join('')}
-</div>
-                        <div class="desc-box">
-                            <p>${r.bonus2.replace(/\n/g, '<br>')}</p>
-                            <hr style="border:0; border-top:1px solid var(--border)">
-                            <p><b>Magias:</b> ${r.magias} <span class='pigmento'>+ ${c.m.join(', ')}</span></p>
-                            <p><b>Passivas:</b> ${r.passivas} <span class='pigmento'>+ ${c.p.join(', ')}</span></p>
-                            <p><b>Talentos:</b> ${r.talentos} <span class='pigmento'>+ ${c.t.join(', ')} | ${c.a.join(', ')}</span></p>
+                <div class="bonus-list">
+                    ${
+                      Object.entries(ref.bonus)
+                      .filter(([nivel]) => parseInt(nivel) <= c.nivel)
+                      .map(([nivel, texto]) => `
+                        <div class="nivel-bonus 
+                            ${nivel == 0 ? 'nivel-zero' : ''} 
+                            ${nivel == c.nivel ? 'nivel-atual' : ''}">
+                            
+                            <strong>Nível ${nivel}</strong>
+                            <div>
+                              ${
+                                texto.includes('|')
+                                ? renderOpcoesPassado(texto, nivel, c)
+                                : texto.replace(/\n/g, "<br>")
+                              }
+                            </div>
                         </div>
-                         <div class="desc-box">
-                                                     <p  ><b class='pigmento'>descrição:</b> ${r.desc} <span></span></p>
+                      `).join('')
+                    }
+                </div>
+            </details>
+        </div>
+    </div>`;
+})() : ''}
 
-                         </div>
+                    <div id="equipmentSlots">
+                        <div id="slot-cabeca" class="equip-slot" data-slot="cabeca">
+                            <span class="slot-label">Cabeça</span><img class="slot-img" src=""><div class="item-tooltip"><h3 class="tooltip-name"></h3><p class="tooltip-desc"></p><ul class="tooltip-stats"></ul></div>
+                        </div>
+                        <div id="slot-peito" class="equip-slot" data-slot="peitoral">
+                            <span class="slot-label">Peitoral</span><img class="slot-img" src=""><div class="item-tooltip"><h3 class="tooltip-name"></h3><p class="tooltip-desc"></p><ul class="tooltip-stats"></ul></div>
+                        </div>
+                        <div id="slot-maos" class="equip-slot" data-slot="maos">
+                            <span class="slot-label">Mãos</span><img class="slot-img" src=""><div class="item-tooltip"><h3 class="tooltip-name"></h3><p class="tooltip-desc"></p><ul class="tooltip-stats"></ul></div>
+                        </div>
+                        <div id="slot-pernas" class="equip-slot" data-slot="pernas">
+                            <span class="slot-label">Pernas</span><img class="slot-img" src=""><div class="item-tooltip"><h3 class="tooltip-name"></h3><p class="tooltip-desc"></p><ul class="tooltip-stats"></ul></div>
+                        </div>
+                        <div id="slot-acessorio" class="equip-slot" data-slot="acessorio">
+                            <span class="slot-label">Acessório</span><img class="slot-img" src=""><div class="item-tooltip"><h3 class="tooltip-name"></h3><p class="tooltip-desc"></p><ul class="tooltip-stats"></ul></div>
+                        </div>
+                    </div>
+
+                    <div id="armas-extras" style="margin-top: 10px; display: grid; gap: 10px;">
+                        ${c.a.map(nomeArma => {
+                            const arma = db.extras.a.find(w => w.name === nomeArma);
+                            if(!arma) return '';
+                            return `
+                            <div style="background: rgba(124, 58, 237, 0.1); border: 1px solid var(--primary); padding: 12px; border-radius: 8px; font-size: 0.85em;">
+                                <b style="color: var(--accent); text-transform: uppercase;">⚔️ ${arma.name}</b>
+                                <div style="display:flex; gap:10px; margin-top:8px;">
+                                    <img src="${arma.img}" style="width:60px; height:60px; object-fit:contain; border-radius:8px; background:#000;">
+                                    <div style="flex:1">
+                                        <div style="opacity:0.9; font-size:0.85em; margin-bottom:6px;">${arma.desc}</div>
+                                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                                            <span><b>Dano:</b> ${arma.damageType}</span>
+                                            <span><b>Tipo:</b> ${arma.damageDice}</span>
+                                            <span><b>Elemento:</b> ${arma.elementalDamage}</span>
+                                            <span><b>Alcance:</b> ${arma.range}</span>
+                                            <span><b>Crítico:</b> ${arma.critical}</span>
+                                            <span style="grid-column: span 2;"><b>Bônus:</b> ${arma.equipBonus}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+
+                    <div class="desc-box">
+                        <p>${r.bonus2.replace(/\n/g, '<br>')}</p>
+                        <hr style="border:0; border-top:1px solid var(--border)">
+                        <p><b>Magias:</b> ${r.magias} <span class='pigmento'>+ ${c.m.join(', ')}</span></p>
+                        <p><b>Passivas:</b> ${r.passivas} <span class='pigmento'>+ ${c.p.join(', ')}</span></p>
+                        <p><b>Talentos:</b> ${r.talentos} <span class='pigmento'>+ ${c.t.join(', ')} | ${c.a.join(', ')}</span></p>
+                    </div>
+                    
+                    <div class="desc-box">
+                        <p><b class='pigmento'>descrição:</b> ${r.desc} <span></span></p>
                     </div>
                 </div>
-            </div>`;
-        show('view');
-    }
+            </div>
+        </div>`;
+    
+    show('view');
+}
    function healFull(id) {
     const c = chars.find(i => i.id === id);
     if (!c) return;
