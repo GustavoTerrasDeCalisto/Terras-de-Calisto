@@ -1059,7 +1059,15 @@ body {
     <div id="list" class="section active">
         <div id="grid-main" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;"></div>
     </div>
-
+<div id="community" class="section" style="display:none;">
+    <div class="header">
+        <h2>🌍 Comunidade</h2>
+        <button class="btn btn-s" onclick="show('main')">Voltar</button>
+    </div>
+    
+    <div id="communityGrid" style="margin-top: 20px;">
+        </div>
+</div>
     <!-- TELA CRIADOR -->
     <div id="create" class="section">
         <div class="form-grid">
@@ -2969,9 +2977,21 @@ function updateFormPreview() {
 
 
 
-   function show(id) { 
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); 
-    document.getElementById(id).classList.add('active'); 
+function show(id) {
+    const el = document.getElementById(id);
+    if (!el) {
+        console.error("Erro: A seção com ID '" + id + "' não foi encontrada no HTML!");
+        return;
+    }
+    
+    // Esconde todas as outras seções antes de mostrar a nova
+    document.querySelectorAll('.section').forEach(sec => {
+        sec.style.display = 'none';
+        sec.classList.remove('active'); // Linha que provavelmente gera o erro
+    });
+
+    el.style.display = 'block';
+    el.classList.add('active');
 }
 
 function openCreate() { 
@@ -3384,8 +3404,7 @@ function view(id) {
     document.getElementById('sheet-content').innerHTML = `
         <div class="sheet">
             <button class="btn btn-s" onclick="show('list')">← Voltar</button>
-            <button class="btn btn-p" onclick="postarCriatura(${id})">🌍 Publicar</button>
-
+<button class="btn btn-s" style="background:#4ade80" onclick="postarCriatura(${id})">📢 Postar na Comunidade</button>
             <div style="float:right">
                 <button class="btn btn-p" onclick="up(${id})">Subir Nível</button>
                 <button class="btn btn-s" style="background:var(--hp)" onclick="del(${id})">Deletar</button>
@@ -9429,33 +9448,45 @@ async function carregarComunidade() {
     const { data, error } = await supabaseClient
         .from("criaturas_publicas")
         .select("*")
-        .order("id", { ascending: false });
+        .order("criado_em", { ascending: false }); // Ordenando pela data de criação
 
     if (error) {
         grid.innerHTML = `<p style='color:var(--hp)'>Erro: ${error.message}</p>`;
         return;
     }
 
+    if (!data || data.length === 0) {
+        grid.innerHTML = "<p style='color:var(--text); text-align:center;'>Nenhum post encontrado.</p>";
+        return;
+    }
+
     grid.innerHTML = "";
-    
-    // Guardamos os dados em uma variável global temporária para os botões acessarem sem bugar
     window.comunidadeAtual = data;
 
     data.forEach((item, index) => {
-        const c = item.dados;
-        const r = db[c.origem || 'racas']?.[c.raca];
-        if(!r) return;
+        const c = item.dados; // Os dados JSON que vi na sua imagem
+        
+        // Tenta achar a imagem da raça em qualquer lugar do seu db
+        let racaEncontrada = null;
+        for (let pasta in db) {
+            if (db[pasta][c.raca]) {
+                racaEncontrada = db[pasta][c.raca];
+                break;
+            }
+        }
+
+        // Se não tiver imagem na raça nem no personagem, usa uma padrão
+        const foto = c.imgAnexada || (racaEncontrada ? racaEncontrada.img : "https://via.placeholder.com/60");
 
         const card = document.createElement("div");
         card.innerHTML = `
             <div style="display: flex; align-items: center; background: var(--card); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 10px;">
-                <img src="${c.imgAnexada || r.img}" style="width:60px; height:60px; border-radius:8px; margin-right:15px; object-fit: cover;">
+                <img src="${foto}" style="width:60px; height:60px; border-radius:8px; margin-right:15px; object-fit: cover; background: #222;">
                 <div style="flex:1">
-                    <b style="color:var(--text)">${c.nome}</b><br>
-                    <small style="color:var(--accent)">${c.raca} | Nv.${c.nivel}</small>
+                    <b style="color:var(--text)">${c.nome || 'Sem Nome'}</b><br>
+                    <small style="color:var(--accent)">${c.raca || 'Desconhecida'} | Nv.${c.nivel || 1}</small>
                 </div>
                 <div style="display:flex; gap: 5px;">
-                    <!-- Passamos o INDEX do array, impossível de quebrar -->
                     <button class="btn btn-p" onclick="verPublicaPelaComunidade(${index})">Ver</button>
                     <button class="btn btn-s" style="background:var(--accent)" onclick="importarPelaComunidade(${index})">📥</button>
                 </div>
